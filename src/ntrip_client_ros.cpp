@@ -2,7 +2,7 @@
 // Created by farukbaykara on 04.05.2023.
 //
 
-#include "../include/ntrip_client_ros/ntrip_client_ros.hpp"
+#include "ntrip_client_ros/ntrip_client_ros.hpp"
 
 using namespace std;
 using namespace chrono_literals;
@@ -54,24 +54,26 @@ NtripClientRos::NtripClientRos():Node("ntrip_client_ros"),
                     ParameterValue{true},
                     ParameterDescriptor{})
                 .get<bool>()},
+  m_ntrip_location_lat{this->declare_parameter(
+                    "ntrip_location_lat",
+                    ParameterValue{0.0},
+                    ParameterDescriptor{})
+                    .get<double>()},
+  m_ntrip_location_lon{this->declare_parameter(
+                    "ntrip_location_lon",
+                    ParameterValue{0.0},
+                    ParameterDescriptor{})
+                    .get<double>()},
+  m_nav_sat_fix_topic{this->declare_parameter(
+                    "nav_sat_fix_topic",
+                    ParameterValue{"/fix"},
+                    ParameterDescriptor{})
+                    .get<std::string>()},
   m_debug_{this->declare_parameter(
                     "debug",
                     ParameterValue{true},
                     ParameterDescriptor{})
                 .get<bool>()},
-
-  m_ntrip_location_lat{this->declare_parameter(
-                      "ntrip_location_lat",
-                      ParameterValue{41.018893949},
-                      ParameterDescriptor{})
-                  .get<double>()},
-
-  m_ntrip_location_lon{this->declare_parameter(
-                      "ntrip_location_lon",
-                      ParameterValue{28.890924848},
-                      ParameterDescriptor{})
-                  .get<double>()},
-
   m_rtcm_topic_{this->declare_parameter(
                             "rtcm_topic",
                             ParameterValue{"/ntrip/rtcm"},
@@ -81,6 +83,11 @@ NtripClientRos::NtripClientRos():Node("ntrip_client_ros"),
                                    "publish_port_rtcm_active",
                                    ParameterValue{false},
                                    ParameterDescriptor{})
+                               .get<bool>()},
+  m_set_ntrip_location_from_yaml_{this->declare_parameter(
+                                   "set_ntrip_location_from_yaml",
+                                   ParameterValue{false},
+                                   ParameterDescriptor{})
                                .get<bool>()}
 
 {
@@ -88,6 +95,15 @@ NtripClientRos::NtripClientRos():Node("ntrip_client_ros"),
   ReadParameters();
 
   pub_rtcm_ = create_publisher<mavros_msgs::msg::RTCM>(m_rtcm_topic_,rclcpp::QoS{1},PubAllocT{});
+
+  if(m_set_ntrip_location_from_yaml_ && !is_connected){
+    ConnectNtripClient();
+  }
+  else{
+    sub_nav_sat_fix_ = create_subscription<sensor_msgs::msg::NavSatFix>(
+      m_nav_sat_fix_topic, rclcpp::QoS{1}, std::bind(&NtripClientRos::NavSatCB, this, _1));
+    RCLCPP_INFO(this->get_logger(), "Waiting for %s to be Published",m_nav_sat_fix_topic.c_str());
+  }
 
   if(m_publish_port_rtcm_active_) {
     try {
@@ -111,11 +127,14 @@ NtripClientRos::NtripClientRos():Node("ntrip_client_ros"),
       // m_serial_boost_.setCallback(bind(&NtripClientRos::serial_receive_callback, this, _1, _2));
     }
   }
+}
 
+void NtripClientRos::ConnectNtripClient(){
   int i = 2000;
   while(i>0 && rclcpp::ok()){
     if(NtripClientStart()){
       RCLCPP_INFO(this->get_logger(), "\033[1;32m NTRIP client connected \033[0m");
+      is_connected=true;
       break;
     }
     else{
@@ -125,13 +144,27 @@ NtripClientRos::NtripClientRos():Node("ntrip_client_ros"),
     //rclcpp::sleep_for(std::chrono::nanoseconds(std::pow(10,9)));
     sleep(1);
   }
+}
 
-
+void NtripClientRos::NavSatCB(const sensor_msgs::msg::NavSatFix::SharedPtr msg){
+  m_ntrip_location_lat = msg->latitude;
+  m_ntrip_location_lon = msg->longitude;
+  if(!is_connected){
+    RCLCPP_INFO(this->get_logger(), "\033[1;34m NavSatFix Topic:\033[0m %s",m_nav_sat_fix_topic);
+    RCLCPP_INFO(this->get_logger(), "\033[1;34m NTRIP Location Lat:\033[0m %f",m_ntrip_location_lat);
+    RCLCPP_INFO(this->get_logger(), "\033[1;34m NTRIP Location Lon:\033[0m %f",m_ntrip_location_lon);
+    ConnectNtripClient();
+  }
+  if(is_connected)
+    sub_nav_sat_fix_.reset();
 }
 
 bool NtripClientRos::NtripClientStart()
 {
   m_ntripClient_.Init(m_ntrip_ip_,m_ntrip_port_,m_ntrip_username_,m_ntrip_password_,m_ntrip_mountpoint_);
+  
+  m_ntripClient_.set_location(m_ntrip_location_lat,m_ntrip_location_lon);
+  m_ntripClient_.set_report_interval(0.001);
 
   m_ntripClient_.OnReceived([this](const char *buffer, int size)
                          {
@@ -174,8 +207,6 @@ bool NtripClientRos::NtripClientStart()
                          });
 
 
-  m_ntripClient_.set_location(m_ntrip_location_lat,m_ntrip_location_lon);
-  m_ntripClient_.set_report_interval(0.001);
   return m_ntripClient_.Run();
 
 }
@@ -189,8 +220,12 @@ void NtripClientRos::ReadParameters()
   RCLCPP_INFO(this->get_logger(), "\033[1;34m NTRIP Password:\033[0m %s",m_ntrip_password_.c_str());
   RCLCPP_INFO(this->get_logger(), "\033[1;34m NTRIP MountPoint:\033[0m %s",m_ntrip_mountpoint_.c_str());
   RCLCPP_INFO(this->get_logger(), "\033[1;34m NTRIP Port:\033[0m %d",m_ntrip_port_);
-  RCLCPP_INFO(this->get_logger(), "\033[1;34m NTRIP Location Lat:\033[0m %f",m_ntrip_location_lat);
-  RCLCPP_INFO(this->get_logger(), "\033[1;34m NTRIP Location Lon:\033[0m %f",m_ntrip_location_lon);
+  RCLCPP_INFO(this->get_logger(), "\033[1;34m Set NTRIP Location Manually:\033[0m %B",m_set_ntrip_location_from_yaml_);
+  if(m_set_ntrip_location_from_yaml_){
+    RCLCPP_INFO(this->get_logger(), "\033[1;34m NavSatFix Topic:\033[0m %s",m_nav_sat_fix_topic);
+    RCLCPP_INFO(this->get_logger(), "\033[1;34m NTRIP Location Lat:\033[0m %f",m_ntrip_location_lat);
+    RCLCPP_INFO(this->get_logger(), "\033[1;34m NTRIP Location Lon:\033[0m %f",m_ntrip_location_lon);
+  }
   RCLCPP_INFO(this->get_logger(), "\033[1;34m Publish RTCM Msg via ROS:\033[0m %B",m_publish_ros_rtcm_active_);
   RCLCPP_INFO(this->get_logger(), "\033[1;34m Debug:\033[0m %B",m_debug_);
   RCLCPP_INFO(this->get_logger(), "\033[1;34m -----------------------------------------------------");

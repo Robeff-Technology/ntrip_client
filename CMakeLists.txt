@@ -5,7 +5,7 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-include_directories(include/ntrip_client_ros)
+include_directories(include)
 # find dependencies
 find_package(ament_cmake_auto REQUIRED)
 find_package(ament_cmake REQUIRED)
@@ -28,16 +28,16 @@ set(NTRIP_LIB_SRC
         src/ntrip_lib/ntrip_util.cpp)
 
 set(NTRIP_LIB_HEADER
-        include/ntrip_client_ros/ntrip/cmake_definition.h
-        include/ntrip_client_ros/ntrip/ntrip_client.h
-        include/ntrip_client_ros/ntrip/ntrip_util.h
-        include/ntrip_client_ros/ntrip/thread_raii.h)
+        include/ntrip/cmake_definition.h
+        include/ntrip/ntrip_client.h
+        include/ntrip/ntrip_util.h
+        include/ntrip/thread_raii.h)
 
 set(ASYNC_SERIAL_SRC
         src/AsyncSerial.cpp)
 
 set(ASYNC_SERIAL_HEADER
-        include/ntrip_client_ros/AsyncSerial.h)
+        include/AsyncSerial.h)
 
 add_executable(ntrip_client_exe
         ${NTRIP_CLIENT_ROS_SRC}

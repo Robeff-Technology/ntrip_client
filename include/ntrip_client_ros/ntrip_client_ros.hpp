@@ -20,6 +20,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include "nmea_msgs/msg/gpgga.h"
 #include "mavros_msgs/msg/rtcm.hpp"
+#include "sensor_msgs/msg/nav_sat_fix.hpp"
 
 #include "AsyncSerial.h"
 
@@ -39,6 +40,10 @@ private:
 
   void ReadParameters();
 
+  void NavSatCB(const sensor_msgs::msg::NavSatFix::SharedPtr msg);
+
+  void ConnectNtripClient();
+
   //Parameters
   std::string m_serial_port_;
   long m_serial_baud_rate_;
@@ -53,6 +58,10 @@ private:
   double m_ntrip_location_lon;
   std::string m_rtcm_topic_;
   bool m_publish_port_rtcm_active_;
+  
+  bool m_set_ntrip_location_from_yaml_;
+  std::string m_nav_sat_fix_topic;
+  bool is_connected{false};
 
 
   CallbackAsyncSerial m_serial_boost_;
@@ -63,6 +72,7 @@ private:
 
   //Publisher
   rclcpp::Publisher<mavros_msgs::msg::RTCM>::SharedPtr pub_rtcm_;
+  rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr sub_nav_sat_fix_;
 
 
 

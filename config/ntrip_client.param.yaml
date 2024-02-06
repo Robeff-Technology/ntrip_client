@@ -6,8 +6,12 @@
     ntrip_password: "......"
     ntrip_mount_point: "VRSRTCM31"
     ntrip_port: 2101
-    ntrip_location_lat: 41.018893949
-    ntrip_location_lon: 28.890924848
+
+    #NTRIP Location Params
+    set_ntrip_location_from_yaml: false
+    nav_sat_fix_topic: "/sensing/gnss/clap/ros/gps_nav_sat_fix" #if set_ntrip_location_from_yaml false
+    ntrip_location_lat: 40.1740978  #if set_ntrip_location_active true
+    ntrip_location_lon: 28.7735008  #if set_ntrip_location_active true
 
     #Serial Port Params
     publish_port_rtcm_active: false
